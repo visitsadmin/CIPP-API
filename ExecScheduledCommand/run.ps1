@@ -16,9 +16,14 @@ try {
     }
 
     Write-Host 'ran the command'
-    if ($results.GetType() -eq [String]) {
+    if ($results -is [String]) {
         $results = @{ Results = $results }
     }
+    if ($results -is [array]) {
+        $results = $results | Where-Object { $_ -is [string] }
+        $results = $results | ForEach-Object { @{ Results = $_ } }
+    }
+
     $results = $results | Select-Object * -ExcludeProperty RowKey, PartitionKey
 
     $StoredResults = $results | ConvertTo-Json -Compress -Depth 20 | Out-String
