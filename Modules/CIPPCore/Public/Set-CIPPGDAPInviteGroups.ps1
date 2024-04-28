@@ -6,8 +6,10 @@ function Set-CIPPGDAPInviteGroups {
         $Invite = Get-CIPPAzDataTableEntity @Table -Filter "RowKey eq '$($Relationship.id)'"
         $APINAME = 'GDAPInvites'
         $RoleMappings = $Invite.RoleMappings | ConvertFrom-Json
-
-        foreach ($role in $RoleMappings) {
+        $AccessAssignments = New-GraphGetRequest -Uri "https://graph.microsoft.com/beta/tenantRelationships/delegatedAdminRelationships/$($Relationship.id)/accessAssignments"
+        foreach ($Role in $RoleMappings) {
+            # Skip mapping if group is present in relationship
+            if ($AccessAssignments.id -and $AccessAssignments.accessContainer.accessContainerid -contains $Role.GroupId ) { continue }
             try {
                 $Mappingbody = ConvertTo-Json -Depth 10 -InputObject @{
                     'accessContainer' = @{
@@ -49,7 +51,7 @@ function Set-CIPPGDAPInviteGroups {
                     SkipLog          = $true
                 }
                 #Write-Host ($InputObject | ConvertTo-Json)
-                $InstanceId = Start-NewOrchestration -FunctionName 'CIPPOrchestrator' -InputObject ($InputObject | ConvertTo-Json -Depth 5)
+                $InstanceId = Start-NewOrchestration -FunctionName 'CIPPOrchestrator' -InputObject ($InputObject | ConvertTo-Json -Depth 5 -Compress)
                 Write-Host "Started GDAP Invite orchestration with ID = '$InstanceId'"
             }
         }
