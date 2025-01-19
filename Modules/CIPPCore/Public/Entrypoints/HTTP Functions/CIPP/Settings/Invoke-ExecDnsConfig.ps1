@@ -44,8 +44,8 @@ Function Invoke-ExecDnsConfig {
 
         switch ($Request.Query.Action) {
             'SetConfig' {
-                if ($Request.Query.Resolver) {
-                    $Resolver = $Request.Query.Resolver
+                if ($Request.Body.Resolver) {
+                    $Resolver = $Request.Body.Resolver
                     if ($ValidResolvers -contains $Resolver) {
                         try {
                             $Config.Resolver = $Resolver
@@ -95,7 +95,7 @@ Function Invoke-ExecDnsConfig {
             'RemoveDomain' {
                 $Filter = "RowKey eq '{0}'" -f $Request.Query.Domain
                 $DomainRow = Get-CIPPAzDataTableEntity @DomainTable -Filter $Filter -Property PartitionKey, RowKey
-                Remove-AzDataTableEntity @DomainTable -Entity $DomainRow
+                Remove-AzDataTableEntity -Force @DomainTable -Entity $DomainRow
                 Write-LogMessage -API $APINAME -tenant 'Global' -user $request.headers.'x-ms-client-principal' -message "Removed Domain - $($Request.Query.Domain) " -Sev 'Info'
                 $body = [pscustomobject]@{ 'Results' = "Domain removed - $($Request.Query.Domain)" }
             }

@@ -17,11 +17,12 @@ function Add-CIPPScheduledTask {
     }
 
     $propertiesToCheck = @('Webhook', 'Email', 'PSA')
-    $PostExecution = ($propertiesToCheck | Where-Object { $task.PostExecution.$_ -eq $true }) -join ','
+    $PostExecutionObject = ($propertiesToCheck | Where-Object { $task.PostExecution.$_ -eq $true })
+    $PostExecution = $PostExecutionObject ? ($PostExecutionObject -join ',') : ($Task.PostExecution.value -join ',')
     $Parameters = [System.Collections.Hashtable]@{}
     foreach ($Key in $task.Parameters.PSObject.Properties.Name) {
         $Param = $task.Parameters.$Key
-        if ($Param -is [System.Collections.IDictionary]) {
+        if ($Param -is [System.Collections.IDictionary] -or $Param.Key) {
             $ht = @{}
             foreach ($p in $Param.GetEnumerator()) {
                 $ht[$p.Key] = $p.Value
@@ -59,7 +60,7 @@ function Add-CIPPScheduledTask {
         PartitionKey         = [string]'ScheduledTask'
         TaskState            = [string]'Planned'
         RowKey               = [string]$RowKey
-        Tenant               = [string]$task.TenantFilter
+        Tenant               = $task.TenantFilter.value ? "$($task.TenantFilter.value)" : "$($task.TenantFilter)"
         Name                 = [string]$task.Name
         Command              = [string]$task.Command.value
         Parameters           = [string]$Parameters

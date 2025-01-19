@@ -103,6 +103,7 @@ function Receive-CippOrchestrationTrigger {
         }
 
         if (($Batch | Measure-Object).Count -gt 0) {
+            Write-Information "Batch Count: $($Batch.Count)"
             $Tasks = foreach ($Item in $Batch) {
                 $DurableActivity = @{
                     FunctionName = 'CIPPActivityFunction'
@@ -113,7 +114,7 @@ function Receive-CippOrchestrationTrigger {
                 }
                 Invoke-DurableActivity @DurableActivity
             }
-            if ($NoWait) {
+            if ($NoWait -and $Tasks) {
                 $null = Wait-ActivityFunction -Task $Tasks
             }
         }
@@ -152,7 +153,7 @@ function Receive-CippActivityTrigger {
         if ($Item.FunctionName) {
             $FunctionName = 'Push-{0}' -f $Item.FunctionName
             try {
-                & $FunctionName -Item $Item
+                Invoke-Command -ScriptBlock { & $FunctionName -Item $Item }
 
                 if ($TaskStatus) {
                     $QueueTask.Status = 'Completed'
@@ -207,7 +208,7 @@ function Receive-CIPPTimerTrigger {
 
     foreach ($Function in $Functions) {
         Write-Information "CIPPTimer: $($Function.Command) - $($Function.Cron)"
-        $FunctionStatus = $Statuses | Where-Object { $_.RowKey -eq $Function.Command }
+        $FunctionStatus = $Statuses | Where-Object { $_.RowKey -eq $Function.Id }
         if ($FunctionStatus.OrchestratorId) {
             $FunctionName = $env:WEBSITE_SITE_NAME
             $InstancesTable = Get-CippTable -TableName ('{0}Instances' -f ($FunctionName -replace '-', ''))
@@ -219,7 +220,16 @@ function Receive-CIPPTimerTrigger {
             }
         }
         try {
-            $Results = Invoke-Command -ScriptBlock { & $Function.Command }
+            if ($FunctionStatus.PSObject.Properties.Name -contains 'ErrorMsg') {
+                $FunctionStatus.ErrorMsg = ''
+            }
+
+            $Parameters = @{}
+            if ($Function.Parameters) {
+                $Parameters = $Function.Parameters | ConvertTo-Json | ConvertFrom-Json -AsHashtable
+            }
+
+            $Results = Invoke-Command -ScriptBlock { & $Function.Command @Parameters }
             if ($Results -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
                 $FunctionStatus.OrchestratorId = $Results
                 $Status = 'Started'
@@ -228,9 +238,17 @@ function Receive-CIPPTimerTrigger {
             }
         } catch {
             $Status = 'Failed'
+            $ErrorMsg = $_.Exception.Message
+            if ($FunctionStatus.PSObject.Properties.Name -contains 'ErrorMsg') {
+                $FunctionStatus.ErrorMsg = $ErrorMsg
+            } else {
+                $FunctionStatus | Add-Member -MemberType NoteProperty -Name ErrorMsg -Value $ErrorMsg
+            }
+            Write-Information "Error in CIPPTimer for $($Function.Command): $($_.Exception.Message)"
         }
         $FunctionStatus.LastOccurrence = $UtcNow
         $FunctionStatus.Status = $Status
+
         Add-CIPPAzDataTableEntity @Table -Entity $FunctionStatus -Force
     }
 }

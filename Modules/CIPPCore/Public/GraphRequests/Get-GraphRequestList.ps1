@@ -85,7 +85,12 @@ function Get-GraphRequestList {
     $GraphQuery = [System.UriBuilder]('https://graph.microsoft.com/{0}/{1}' -f $Version, $Endpoint)
     $ParamCollection = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
     foreach ($Item in ($Parameters.GetEnumerator() | Sort-Object -CaseSensitive -Property Key)) {
-        $ParamCollection.Add($Item.Key, $Item.Value)
+        if ($Item.Value -is [System.Boolean]) {
+            $Item.Value = $Item.Value.ToString().ToLower()
+        }
+        if ($Item.Value) {
+            $ParamCollection.Add($Item.Key, $Item.Value)
+        }
     }
     $GraphQuery.Query = $ParamCollection.ToString()
     $PartitionKey = Get-StringHash -String (@($Endpoint, $ParamCollection.ToString()) -join '-')
@@ -155,7 +160,19 @@ function Get-GraphRequestList {
         $GraphQuery = [System.UriBuilder]('https://graph.microsoft.com/{0}/{1}' -f $Version, $Endpoint)
         $ParamCollection = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
         foreach ($Item in ($Parameters.GetEnumerator() | Sort-Object -CaseSensitive -Property Key)) {
-            $ParamCollection.Add($Item.Key, $Item.Value)
+            $ParamCollection.Add($Item.Key, $Item.Value -replace '%tenantid%', $TenantId)
+        }
+        $GraphQuery.Query = $ParamCollection.ToString()
+        $GraphRequest.uri = $GraphQuery.ToString()
+    }
+
+    if ($TenantFilter -ne 'AllTenants' -and $Endpoint -match '%appid%') {
+        Write-Information "Replacing AppId in endpoint with $env:ApplicationID"
+        $Endpoint = $Endpoint -replace '%appid%', $env:ApplicationID
+        $GraphQuery = [System.UriBuilder]('https://graph.microsoft.com/{0}/{1}' -f $Version, $Endpoint)
+        $ParamCollection = [System.Web.HttpUtility]::ParseQueryString([String]::Empty)
+        foreach ($Item in ($Parameters.GetEnumerator() | Sort-Object -CaseSensitive -Property Key)) {
+            $ParamCollection.Add($Item.Key, $Item.Value -replace '%appid%', $env:ApplicationID)
         }
         $GraphQuery.Query = $ParamCollection.ToString()
         $GraphRequest.uri = $GraphQuery.ToString()
@@ -246,6 +263,7 @@ function Get-GraphRequestList {
             default {
                 try {
                     $QueueThresholdExceeded = $false
+
                     if ($Parameters.'$count' -and !$SkipCache -and !$NoPagination) {
                         if ($Count -gt $singleTenantThreshold) {
                             $QueueThresholdExceeded = $true
@@ -290,7 +308,7 @@ function Get-GraphRequestList {
 
                     if (!$QueueThresholdExceeded) {
                         #nextLink should ONLY be used in direct calls with manual pagination. It should not be used in queueing
-                        if ($nextLink) { $GraphRequest.uri = $nextLink }
+                        if ($NoPagination.IsPresent -and $nextLink -match '^https://.+') { $GraphRequest.uri = $nextLink }
 
                         $GraphRequestResults = New-GraphGetRequest @GraphRequest -Caller 'Get-GraphRequestList' -ErrorAction Stop
                         $GraphRequestResults = $GraphRequestResults | Select-Object *, @{n = 'Tenant'; e = { $TenantFilter } }, @{n = 'CippStatus'; e = { 'Good' } }
@@ -313,7 +331,8 @@ function Get-GraphRequestList {
                     }
 
                 } catch {
-                    throw $_.Exception
+                    $Message = ('Exception at {0}:{1} - {2}' -f $_.InvocationInfo.ScriptName, $_.InvocationInfo.ScriptLineNumber, $_.Exception.Message)
+                    throw $Message
                 }
             }
         }

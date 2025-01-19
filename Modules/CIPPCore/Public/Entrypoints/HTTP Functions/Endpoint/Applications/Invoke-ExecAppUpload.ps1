@@ -14,13 +14,13 @@ function Invoke-ExecAppUpload {
     if ($Config -and $Config.state -eq $true) {
         if ($env:CIPP_PROCESSOR -ne 'true') {
             $ProcessorFunction = [PSCustomObject]@{
-                PartitionKey      = 'Function'
-                RowKey            = 'Start-ApplicationOrchestrator'
-                ProcessorFunction = 'Start-ApplicationOrchestrator'
+                PartitionKey = 'Function'
+                RowKey       = 'Start-ApplicationOrchestrator'
+
             }
             $ProcessorQueue = Get-CIPPTable -TableName 'ProcessorQueue'
             Add-AzDataTableEntity @ProcessorQueue -Entity $ProcessorFunction -Force
-            $Results = [pscustomobject]@{'Results' = 'Queueing application upload' }
+            $Results = [pscustomobject]@{'Results' = 'Application upload job has started. Please check back in 15 minutes or track the logbook for results.' }
         }
     } else {
         try {

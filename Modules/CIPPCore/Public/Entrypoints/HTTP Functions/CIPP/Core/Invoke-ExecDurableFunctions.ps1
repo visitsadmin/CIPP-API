@@ -95,7 +95,7 @@ function Invoke-ExecDurableFunctions {
                     if ($PSCmdlet.ShouldProcess('Orchestrators', 'Mark Failed')) {
                         foreach ($Instance in $RunningInstances) {
                             $Instance.RuntimeStatus = 'Failed'
-                            Update-AzDataTableEntity @InstancesTable -Entity $Instance
+                            Update-AzDataTableEntity -Force @InstancesTable -Entity $Instance
                         }
                     }
                 }
@@ -110,7 +110,7 @@ function Invoke-ExecDurableFunctions {
                 }
                 if (($QueueEntities | Measure-Object).Count -gt 0) {
                     if ($PSCmdlet.ShouldProcess('Queues', 'Mark Failed')) {
-                        Update-AzDataTableEntity @QueueTable -Entity $QueueEntities
+                        Update-AzDataTableEntity -Force @QueueTable -Entity $QueueEntities
                     }
                 }
 
@@ -122,7 +122,7 @@ function Invoke-ExecDurableFunctions {
                             $Task.Status = 'Failed'
                             $Task
                         }
-                        Update-AzDataTableEntity @CippQueueTasks -Entity $UpdatedTasks
+                        Update-AzDataTableEntity -Force @CippQueueTasks -Entity $UpdatedTasks
                     }
                 }
 
@@ -142,11 +142,11 @@ function Invoke-ExecDurableFunctions {
             if ($Request.Query.PartitionKey) {
                 $HistoryEntities = Get-CIPPAzDataTableEntity @HistoryTable -Filter "PartitionKey eq '$($Request.Query.PartitionKey)'" -Property RowKey, PartitionKey
                 if ($HistoryEntities) {
-                    Remove-AzDataTableEntity @HistoryTable -Entity $HistoryEntities
+                    Remove-AzDataTableEntity -Force @HistoryTable -Entity $HistoryEntities
                 }
                 $Instance = Get-CIPPAzDataTableEntity @InstancesTable -Filter "PartitionKey eq '$($Request.Query.PartitionKey)'" -Property RowKey, PartitionKey
                 if ($Instance) {
-                    Remove-AzDataTableEntity @InstancesTable -Entity $Instance
+                    Remove-AzDataTableEntity -Force @InstancesTable -Entity $Instance
                 }
                 $Body = [PSCustomObject]@{
                     Results = 'Orchestrator {0} purged successfully' -f $Request.Query.PartitionKey
